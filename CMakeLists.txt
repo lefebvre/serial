@@ -1,78 +1,85 @@
-cmake_minimum_required(VERSION 2.8.3)
-project(serial)
+################################################################################
+#                                                                              #
+#             serial  TriBITS Project and Package CMakeLists.txt File           #
+#                                                                              #
+################################################################################
+  #
+  # Default MPI to OFF
+  #
+  SET(TPL_ENABLE_MPI OFF CACHE BOOL "" FORCE)
+  #
+  # Default Fortran OFF
+  #
+  SET(serial_ENABLE_Fortran OFF CACHE BOOL "" FORCE)
 
-# Find catkin
-find_package(catkin REQUIRED)
+IF (NOT TRIBITS_PROCESSING_PACKAGE)
+  # This CMakeLists.txt file is being processed as the serial TriBITS projects's base
+  # CMakeLists.txt file!  (See comments at bottom of this file.)
+  CMAKE_MINIMUM_REQUIRED(VERSION 2.8.12 FATAL_ERROR)
+  INCLUDE("${CMAKE_CURRENT_SOURCE_DIR}/ProjectName.cmake")
+  PROJECT(${PROJECT_NAME} NONE)
+  # enable C++11 by default
+  SET(serial_ENABLE_CXX11 ON CACHE BOOL "Compile using the C++11 standard" FORCE)
 
-if(APPLE)
-	find_library(IOKIT_LIBRARY IOKit)
-	find_library(FOUNDATION_LIBRARY Foundation)
-endif()
+  # disable generating HTML dependencies webpage and xml files
+  SET(${PROJECT_NAME}_DEPS_XML_OUTPUT_FILE OFF CACHE BOOL "")
+  # disable TriBITS export system to save time configuring
+  SET(${PROJECT_NAME}_ENABLE_INSTALL_CMAKE_CONFIG_FILES OFF CACHE BOOL "")
+  SET(${PROJECT_NAME}_ENABLE_EXPORT_MAKEFILES OFF CACHE BOOL "")
+  SET(${PROJECT_NAME}_TRIBITS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/TriBITS/tribits" CACHE PATH "")
+  INCLUDE("${${PROJECT_NAME}_TRIBITS_DIR}/TriBITS.cmake")
 
-if(UNIX AND NOT APPLE)
-    # If Linux, add rt and pthread
-    catkin_package(
-        LIBRARIES ${PROJECT_NAME}
-        INCLUDE_DIRS include
-        DEPENDS rt pthread
-    )
-else()
-    # Otherwise normal call
-    catkin_package(
-        LIBRARIES ${PROJECT_NAME}
-        INCLUDE_DIRS include
-    )
-endif()
-
-## Sources
-set(serial_SRCS
+  TRIBITS_PROJECT_ENABLE_ALL()
+ELSE()
+  # This CMakeLists.txt file is being processed as the TriBITS package file.
+  INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/include)
+  TRIBITS_PACKAGE(serial)
+  IF(APPLE)
+    FIND_LIBRARY(IOKIT_LIBRARY IOKit)
+    FIND_LIBRARY(FOUNDATION_LIBRARY Foundation)
+  ENDIF()
+  SET(serial_SOURCE
     src/serial.cc
+  )
+  SET(serial_HEADERS
     include/serial/serial.h
     include/serial/v8stdint.h
-)
-if(APPLE)
-	# If OSX
-	list(APPEND serial_SRCS src/impl/unix.cc)
-	list(APPEND serial_SRCS src/impl/list_ports/list_ports_osx.cc)
-elseif(UNIX)
-    # If unix
-    list(APPEND serial_SRCS src/impl/unix.cc)
-    list(APPEND serial_SRCS src/impl/list_ports/list_ports_linux.cc)
-else()
-    # If windows
-    list(APPEND serial_SRCS src/impl/win.cc)
-    list(APPEND serial_SRCS src/impl/list_ports/list_ports_win.cc)
-endif()
+  )
+  IF(APPLE)
+     LIST(APPEND serial_SOURCE
+         src/impl/unix.cc
+         src/impl/list_ports/list_ports_osx.cc
+     )
+  ELSEIF(UNIX)
+     LIST(APPEND serial_SOURCE
+         src/impl/unix.cc
+         src/impl/list_ports/list_ports_linux.cc
+     )
+  ELSE()
+     LIST(APPEND serial_SOURCE
+         src/impl/win.cc
+         src/impl/list_ports/list_ports_win.cc
+     )
+  ENDIF()
 
-## Add serial library
-add_library(${PROJECT_NAME} ${serial_SRCS})
-if(APPLE)
-	target_link_libraries(${PROJECT_NAME} ${FOUNDATION_LIBRARY} ${IOKIT_LIBRARY})
-elseif(UNIX)
-	target_link_libraries(${PROJECT_NAME} rt pthread)
-else()
-	target_link_libraries(${PROJECT_NAME} setupapi)
-endif()
+  TRIBITS_ADD_LIBRARY(serial
+    SOURCE ${serial_SOURCE}
+    NOINSTALLHEADERS ${serial_SOURCE}
+  )
+  IF(APPLE)
+    TARGET_LINK_LIBRARIES(serial ${FOUNDATION_LIBRARY} ${IOKIT_LIBRARY})
+  ENDIF()
+  #
+  # add example
+  #
+  TRIBITS_ADD_EXECUTABLE(serial_example
+      SOURCES examples/serial_example.cc
+      NOEXEPREFIX
+  )
+  TRIBITS_PACKAGE_POSTPROCESS()
+ENDIF()
 
-## Uncomment for example
-add_executable(serial_example examples/serial_example.cc)
-add_dependencies(serial_example ${PROJECT_NAME})
-target_link_libraries(serial_example ${PROJECT_NAME})
-
-## Include headers
-include_directories(include)
-
-## Install executable
-install(TARGETS ${PROJECT_NAME}
-    ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-    LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-)
-
-## Install headers
-install(FILES include/serial/serial.h include/serial/v8stdint.h
-  DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION}/serial)
-
-## Tests
-if(CATKIN_ENABLE_TESTING)
-    add_subdirectory(tests)
-endif()
+# NOTE: In order to allow the `serial/` directory to be both a TriBITS
+# package (for inclusion in other TriBITS projects) and to be a TriBITS
+# project itself, you only have to put in a simple if statement in this
+# top-level CMakeLists.txt file.  That is all!
